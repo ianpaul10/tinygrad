@@ -204,7 +204,7 @@ class OpenCLRenderer(CStyleLanguage):
   float4 = "(float4)"
   code_for_workitem = {"g": lambda x: f"get_group_id({x})", "l": lambda x: f"get_local_id({x})", "i": lambda x: f"get_global_id({x})"}
   uses_vload = True
-  type_map = { dtypes.uint8: "uchar", dtypes.uint32: "uint", dtypes.uint16: "ushort", dtypes.uint64: "ulong" }
+  type_map = { dtypes.uint8: "uchar", dtypes.uint32: "uint", dtypes.uint16: "ushort", dtypes.uint64: "ulong", dtypes.bfloat16: "ushort" }
   def render_cast(self, x, var_dtype, bitcast=False) -> str:
     return f"as_{self.render_dtype(var_dtype)}({x})" if bitcast else super().render_cast(x, var_dtype)
 
@@ -389,6 +389,20 @@ static inline __attribute__((device)) bool operator==(hip_bfloat16 a, hip_bfloat
     # https://clang.llvm.org/docs/AttributeReference.html#amdgpu-flat-work-group-size
     # NOTE: this makes hlb_cifar10 twice as fast, there may be more gains in tweaking these parameters
     return f"__attribute__((amdgpu_flat_work_group_size(1, {requiredMaxThreadsPerBlock})))"
+class IntelRenderer(OpenCLRenderer):
+  device, kernel_prefix = "INTEL", "__attribute__((intel_reqd_sub_group_size(8)))\n" + OpenCLRenderer.kernel_prefix
+  tensor_cores = [TensorCore(dims=(8,8,16), threads=[(0,8)], thread_local_sizes=[[2,8], [16], [8]], dtype_in=di, dtype_out=do) for di, do in [(dtypes.half, dtypes.float), (dtypes.bfloat16, dtypes.float), (dtypes.float, dtypes.float)]]  # noqa: E501
+  def render_dtype(self, var_dtype:DType) -> str:
+    return f"ushort{var_dtype.count}" if "bfloat16" in var_dtype.name else super().render_dtype(var_dtype)
+  def render_cast(self, x, var_dtype, bitcast=False) -> str: # TODO: handle all casts
+    if var_dtype == dtypes.bfloat16: return f"intel_convert_bfloat16_as_ushort({x})"
+    if var_dtype == dtypes.float: return f"intel_convert_as_bfloat16_float({x})"
+    return super().render_cast(x, var_dtype, bitcast)
+  def render_kernel(self, function_name, kernel, bufs, uops, prefix=None) -> str:
+    for arg in set([uop.arg for uop in uops if uop.op is UOps.WMMA]):
+      dt_in = ("ushort", "bf16") if arg[2] == dtypes.bfloat16 else (arg[2].name, "f16")
+      prefix = [f"""{arg[3].name}8 __{arg[0]}({dt_in[0]}16 a, {dt_in[0]}16 b, {arg[3].name}8 c) {{return intel_sub_group_{dt_in[1]}_{dt_in[1]}_matrix_mad_k16(as_int8(a), as_int8(b), c);\n}}"""] # noqa: E501
+    return super().render_kernel(function_name, kernel, bufs, uops, prefix)
 
 class NVRenderer(CUDARenderer): device = "NV"
 class HIPRenderer(AMDRenderer): device = "HIP"
