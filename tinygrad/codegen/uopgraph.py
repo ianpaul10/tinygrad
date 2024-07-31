@@ -398,6 +398,8 @@ def create_gate(root:UOp) -> Optional[UOp]:
   @functools.lru_cache(None)
   def _gate_srcs(u:UOp, gate:UOp) -> UOp:
     if u.op is UOps.LOAD and u.src[-1].op is UOps.BARRIER: return UOp(u.op, u.dtype, u.src[:-1]+(UOp(UOps.IF, None, (gate, u.src[-1])),), u.arg)
+    if u.op is UOps.STORE and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE}:
+      return UOp(UOps.STORE, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (gate, u.src[-1])),), u.arg)
     return u if (replace_source:=tuple(_gate_srcs(x, gate) for x in u.src)) == u.src else UOp(u.op, u.dtype, replace_source, u.arg)
   return None if len(root.src) == 3 or (ret:=_gate_srcs(root, root.src[3])) is root else ret
 
@@ -423,6 +425,8 @@ def delete_redundant_gates(root:UOp) -> Optional[UOp]:
   def find_gate(x:UOp) -> Optional[UOp]:
     if x.op is UOps.IF: return x
     return next((ret for s in x.src if (ret:=find_gate(s)) is not None), None)
+  # this one to rm gate that was created during expand?
+  # if len(root.src) == 3 or (gate:=find_gate(root)) is None or (gate.src[0] is not root.src[3] and gate is not root.src[3]): 
   if len(root.src) == 3 or (gate:=find_gate(root)) is None or gate.src[0] is not root.src[3]: return None
   return UOp(UOps.STORE, root.dtype, root.src[:3], root.arg)
 
@@ -554,6 +558,9 @@ class UOpGraph:
 
     # end scopes in toposort order
     for u, x in scope_end.items(): self._uops.insert(self._uops.index(x)+1, UOp(END_FOR_UOP[u.op][1], None, (u,)))
+
+    for i, u in enumerate(self._uops):
+      if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.IF: self._uops[i] = UOp(UOps.STORE, u.dtype, u.src[:-1], u.arg)
 
     # sanity checks (NOTE: these can cause things to be skipped in BEAM)
     bad_ops = dedup([x.op for x in self._uops if x.op in {UOps.EXPAND, UOps.CONTRACT, UOps.REDUCE}])
