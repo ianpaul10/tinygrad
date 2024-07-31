@@ -426,7 +426,7 @@ def delete_redundant_gates(root:UOp) -> Optional[UOp]:
     if x.op is UOps.IF: return x
     return next((ret for s in x.src if (ret:=find_gate(s)) is not None), None)
   # this one to rm gate that was created during expand?
-  # if len(root.src) == 3 or (gate:=find_gate(root)) is None or (gate.src[0] is not root.src[3] and gate is not root.src[3]): 
+  # if len(root.src) == 3 or (gate:=find_gate(root)) is None or (gate.src[0] is not root.src[3] and gate is not root.src[3]):
   if len(root.src) == 3 or (gate:=find_gate(root)) is None or gate.src[0] is not root.src[3]: return None
   return UOp(UOps.STORE, root.dtype, root.src[:3], root.arg)
 
