@@ -562,7 +562,7 @@ class UOpGraph:
     for u, x in scope_end.items():
       self._uops.insert(self._uops.index(x)+1, UOp(END_FOR_UOP[u.op][1], None, (u,)))
 
-    for i, u in enumerate(self._uops):
+    for i, u in enumerate(reversed(self._uops)):
       if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.IF:
         self._uops.remove(u.src[-1]) 
         self._uops.insert(self._uops.index(u), u.src[-1])
