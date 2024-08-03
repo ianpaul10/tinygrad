@@ -402,7 +402,9 @@ def create_gate(root:UOp) -> Optional[UOp]:
   @functools.lru_cache(None)
   def _gate_srcs(u:UOp, gate:UOp) -> UOp:
     if u.op is UOps.LOAD and u.src[-1].op is UOps.BARRIER: return UOp(u.op, u.dtype, u.src[:-1]+(UOp(UOps.IF, None, (gate, u.src[-1])),), u.arg)
-    if u.op is UOps.STORE and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE}:
+    if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE}: # og working
+    # if u.op is UOps.STORE and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE, BinaryOps.MUL}:
+    # if u.op is UOps.STORE and u.src[-1].op is UOps.ALU and u.src[-1].dtype == dtypes.bool:
       do_nothing = 0
       return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (gate,)),), u.arg)
     return u if (replace_source:=tuple(_gate_srcs(x, gate) for x in u.src)) == u.src else UOp(u.op, u.dtype, replace_source, u.arg)
@@ -561,13 +563,27 @@ class UOpGraph:
 
     # end scopes in toposort order
     for u, x in scope_end.items():
+      # if u.op is UOps.IF and x.op is UOps.STORE:
+      #   continue
       self._uops.insert(self._uops.index(x)+1, UOp(END_FOR_UOP[u.op][1], None, (u,)))
 
     for i, u in enumerate(reversed(self._uops)):
+      ifs_removed = []
       if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.IF:
         zzz = 0
+        # lets try keeping this commented out, and having us only put the ifs on the same line as the store
+        # instead of needing them right next to each other
         # self._uops.remove(u.src[-1])
+        # ifs_removed.append(u.src[-1])
+        # try:
+        #   self._uops.remove(u.src[-1])
+        # except ValueError:
+        #   pass
+        # ifs_removed.append(u.src[-1])
         # self._uops.insert(self._uops.index(u), u.src[-1])
+      # if u.op is UOps.ENDIF and u.src[0] in ifs_removed:
+      # if u.op is UOps.ENDIF and u.src[0] in ifs_removed:
+      #   self._uops.remove(u)
 
     # sanity checks (NOTE: these can cause things to be skipped in BEAM)
     bad_ops = dedup([x.op for x in self._uops if x.op in {UOps.EXPAND, UOps.CONTRACT, UOps.REDUCE}])

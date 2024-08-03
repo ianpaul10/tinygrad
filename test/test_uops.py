@@ -237,6 +237,17 @@ class TestConstantFolding(unittest.TestCase):
     assert any(uop.op is UOps.BITCAST for uop in ji.prg.p.uops), f"{[uop.op for uop in ji.prg.p.uops]} does not contain bitcast"
 
 class TestGatedStoreRewrite(unittest.TestCase):
+  """
+  2 ways to do this:
+  1. have the IF and ENDIF exist in the list of uops. Wrap each individual STORE op in them.
+
+  2. have the IF only exist as a src of the STORE, and thus render the IF in-line with the STORE op during the rendering phase.
+
+  1 passes these tests below, but fails when there are nested IFs or back to back IFs, etc.
+  2 fails these tests below (because it doesn't have the IFs in the list of uops), but is more in-line with what happens on master today.
+
+  I implemented 1 already but need to do the 2nd part of them where it wraps each STORE with it's own IF instead of putting it in the kk function.
+  """
   def test_tiny_gate_store(self):
     gmem = UOp(UOps.DEFINE_GLOBAL, PtrDType(dtypes.float), (), (0, True))
     gidx0 = UOp(UOps.SPECIAL, dtypes.int, (), ('gidx0', 4))
@@ -245,7 +256,7 @@ class TestGatedStoreRewrite(unittest.TestCase):
     gate = gidx0.lt(UOp.const(dtypes.int, 1))
     store = UOp(UOps.STORE, None, (gmem, idx, val, gate))
     uops = UOpGraph([store])
-    uops.print()
+    # uops.print()
     if DEBUG >= 4: print(Device[Device.DEFAULT].renderer.render("test", uops))
     if_uop = next(u for u in uops if u.op is UOps.IF)
     endif = next(u for u in uops if u.op is UOps.ENDIF)
@@ -281,7 +292,7 @@ class TestGatedStoreRewrite(unittest.TestCase):
     gate = gidx0.lt(UOp.const(dtypes.int, 1))
     stores = [UOp.store(gmem0, idx, val, gate), UOp.store(gmem1, idx, val, gate)]
     uops = UOpGraph(stores)
-    uops.print()
+    # uops.print()
     if DEBUG >= 4: print(Device[Device.DEFAULT].renderer.render("test", uops))
     ifs = [u for u in uops if u.op is UOps.IF]
     endifs = [u for u in uops if u.op is UOps.ENDIF]

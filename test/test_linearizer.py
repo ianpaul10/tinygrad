@@ -1775,12 +1775,10 @@ class TestKernelOpts(unittest.TestCase):
       [Opt(OptOps.PADTO, 1, 32)],
       [Opt(OptOps.PADTO, 2, 32)],
       [Opt(OptOps.PADTO, 0, 32), Opt(OptOps.PADTO, 1, 32)],
-      # [Opt(OptOps.PADTO, 0, 32), Opt(OptOps.PADTO, 1, 32), Opt(OptOps.PADTO, 2, 32)],
-      # # can optimize further post PADTO
-      # [Opt(OptOps.PADTO, 0, 32), Opt(OptOps.PADTO, 1, 32), Opt(OptOps.UPCAST, 0, 2), Opt(OptOps.UPCAST, 1, 2),],
+      [Opt(OptOps.PADTO, 0, 32), Opt(OptOps.PADTO, 1, 32), Opt(OptOps.PADTO, 2, 32)],
+      # can optimize further post PADTO
+      [Opt(OptOps.PADTO, 0, 32), Opt(OptOps.PADTO, 1, 32), Opt(OptOps.UPCAST, 0, 2), Opt(OptOps.UPCAST, 1, 2),],
     ])
-
-    assert 1 == 0
 
   def test_padto_upcasted_not_ok(self):
     N = 4
@@ -1886,6 +1884,8 @@ class TestKernelOpts(unittest.TestCase):
       [Opt(OptOps.PADTO, 0, 32)],
       [Opt(OptOps.PADTO, 0, 32), Opt(OptOps.UPCAST, 0, 8),],
     ])
+
+    # assert 1 == 0
 
   @unittest.skipUnless(Device[Device.DEFAULT].renderer.has_local, "test requires locals")
   @unittest.skipUnless(Device[Device.DEFAULT].renderer.has_shared, "test requires shared")
