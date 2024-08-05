@@ -1857,23 +1857,23 @@ class TestKernelOpts(unittest.TestCase):
       [Opt(OptOps.PADTO, 0, 32)],
       [Opt(OptOps.PADTO, 0, 32), Opt(OptOps.UPCAST, 0, 8),],
     ])
-    # helper_linearizer_opt(a.max(1), [
-    #   [Opt(OptOps.PADTO, 0, 32)],
-    #   [Opt(OptOps.PADTO, 0, 32), Opt(OptOps.UPCAST, 0, 8),],
-    # ])
+    helper_linearizer_opt(a.max(1), [
+      [Opt(OptOps.PADTO, 0, 32)],
+      [Opt(OptOps.PADTO, 0, 32), Opt(OptOps.UPCAST, 0, 8),],
+    ])
 
-    # # cannot pad max kernel on reduce
-    # with self.assertRaises(KernelOptError):
-    #   helper_linearizer_opt(a.max(), [[Opt(OptOps.PADTO, 0, 32)],])
-    # with self.assertRaises(KernelOptError):
-    #   helper_linearizer_opt(a.max(0), [[Opt(OptOps.PADTO, 1, 32)],])
+    # cannot pad max kernel on reduce
+    with self.assertRaises(KernelOptError):
+      helper_linearizer_opt(a.max(), [[Opt(OptOps.PADTO, 0, 32)],])
+    with self.assertRaises(KernelOptError):
+      helper_linearizer_opt(a.max(0), [[Opt(OptOps.PADTO, 1, 32)],])
 
   def test_padto_where(self):
     Tensor.manual_seed(0)
     N = 17 * 17
     a = (Tensor.randn(N, N).realize().max(axis=0, keepdim=True) > 1).where(1, 0)
     helper_linearizer_opt(a.max(0), [
-      [Opt(OptOps.PADTO, 0, 32)],
+      # [Opt(OptOps.PADTO, 0, 32)],
       [Opt(OptOps.PADTO, 0, 32), Opt(OptOps.UPCAST, 0, 8),],
     ])
 
