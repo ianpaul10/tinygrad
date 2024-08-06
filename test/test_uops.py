@@ -294,6 +294,62 @@ class TestGatedStoreRewrite(unittest.TestCase):
     self.assertEqual(len(gated_uops), 2)
     for x in gated_uops: self.assertIs(x.op, UOps.STORE)
 
+    assert 1 == 0
+
+  def test_gate_some_stores_surrounding_no_gate(self):
+    gmem0 = UOp(UOps.DEFINE_GLOBAL, PtrDType(dtypes.float), (), 0)
+    gmem1 = UOp(UOps.DEFINE_GLOBAL, PtrDType(dtypes.float), (), 1)
+    gmem2 = UOp(UOps.DEFINE_GLOBAL, PtrDType(dtypes.float), (), 2)
+    gmem3 = UOp(UOps.DEFINE_GLOBAL, PtrDType(dtypes.float), (), 3)
+    gidx0 = UOp(UOps.SPECIAL, dtypes.int, (), ('gidx0', 4))
+    gidx1 = UOp(UOps.SPECIAL, dtypes.int, (), ('gidx1', 5))
+
+    acc0 = UOp(UOps.DEFINE_ACC, PtrDType(dtypes.float), (), (-1000,))
+
+    range0 = UOp(UOps.RANGE, )
+
+
+
+    idx0 = gidx0*UOp.const(dtypes.int, 2)
+    idx1 = gidx1*UOp.const(dtypes.int, 3)
+    val0 = UOp.const(dtypes.float, 42.0)
+    val1 = UOp.const(dtypes.float, 99.0)
+    val2 = UOp.const(dtypes.float, 120.0)
+    gate0 = gidx0.lt(UOp.const(dtypes.int, 1))
+    gate1 = gidx1.lt(UOp.const(dtypes.int, 1))
+    gate2 = gidx1.ne(gidx0)
+    # gate2 = UOp(UOps.ALU, dtypes.bool, (gate0,))
+
+    where0 = val0.where(gate0, val1)
+    # gate2 = UOp(UOps.ALU, dtypes.bool, (), ('gidx1', 6)).lt(UOp.const(dtypes.int, 1))
+
+    # gate2 = UOp(UOps.ALU, dtypes.bool, (), ('gidx2', 6))
+
+
+    # we want to exclude the middle store from the gated stores
+    store0 = UOp.store(gmem0, idx0, where0, gate0)
+    store1 = UOp.store(gmem1, idx1, val1, gate1)
+    store2 = UOp.store(gmem2, idx0, val0, gate0)
+    store3 = UOp.store(gmem3, idx1, val2, gate2)
+    # stores = [UOp.store(gmem0, idx0, val0, gate0), UOp.store(gmem1, idx0, val0), UOp.store(gmem2, idx0, val0, gate0)]
+    
+    uops = UOpGraph([store0, where0, store1, store2, store3])
+    uops.print()
+    if DEBUG >= 4: print(Device[Device.DEFAULT].renderer.render("test", uops))
+
+    linearized_uops = uops.uops
+
+    # for u in linearized_uops:
+    #   print(u)
+
+    ifs = [u for u in uops if u.op is UOps.IF]
+    endifs = [u for u in uops if u.op is UOps.ENDIF]
+    assert endifs[0].src[0] is ifs[0]
+    gated_uops = tuple(uops.uops[uops.uops.index(ifs[0])+1:uops.uops.index(endifs[0])])
+    self.assertEqual(len(gated_uops), 2)
+    self.assertIs(gated_uops[-1].op, UOps.STORE)
+    assert 1 == 0
+
 class TestLocalAccess(unittest.TestCase):
   # NOTE: this is failing on METAL CI, no idea why. Works locally.
   @unittest.skipIf(Device.DEFAULT == "METAL" and CI, "failing only in CI")

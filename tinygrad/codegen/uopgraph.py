@@ -420,9 +420,9 @@ def create_gate(root:UOp) -> Optional[UOp]:
   @functools.lru_cache(None)
   def _gate_srcs(u:UOp, gate:UOp) -> UOp:
     if u.op is UOps.LOAD and u.src[-1].op is UOps.BARRIER: return UOp(u.op, u.dtype, u.src[:-1]+(UOp(UOps.IF, None, (gate, u.src[-1])),), u.arg)
-    # if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE}: # og working
-    # if u.op is UOps.STORE and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE, BinaryOps.MUL}:
-    if u.op is UOps.STORE and u.src[-1].op is UOps.ALU and u.src[-1].dtype == dtypes.bool: # TODO: maybe this is better?
+    if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE}: # og working
+    # if u.op is UOps.STORE and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE, BinaryOps.MUL}: # v3, probably not the juan
+    # if u.op is UOps.STORE and u.src[-1].op is UOps.ALU and u.src[-1].dtype == dtypes.bool: # TODO: v2 maybe this is better?
       return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, dtypes.bool, (gate,)),), u.arg)
     return u if (replace_source:=tuple(_gate_srcs(x, gate) for x in u.src)) == u.src else UOp(u.op, u.dtype, replace_source, u.arg)
   return None if len(root.src) == 3 or (ret:=_gate_srcs(root, root.src[3])) is root else ret
@@ -565,8 +565,13 @@ class UOpGraph:
       if x in scope_children: scope_end[x] = x
       if x.op is UOps.DEFINE_ACC:
         idx = min([self._uops.index(l) for l in x.src if l.op is UOps.RANGE])
+        if x.op in {UOps.STORE, UOps.IF}:
+          abc = 0
         self._uops.insert(idx, x)
-      else: self._uops.append(x)
+      else:
+        if x.op in {UOps.STORE, UOps.IF}:  
+          abc = 0
+        self._uops.append(x)
       for u, ss in scope_children.items():
         if x in ss:
           ss.remove(x)
@@ -574,6 +579,28 @@ class UOpGraph:
       for u in children[x]:
         in_degree[u] -= 1
         if in_degree[u] == 0: push(u)
+
+
+    for u in self._uops:
+      if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.IF:
+
+
+    # for u, items in scope_children.items():
+    #   if x.op is UOps.IF:
+    #     self._uops.remove(u)
+
+    #     indexes_of_stores = [self._uops.index(x) for x in items]
+    #     indexes_of_stores.sort()
+    #     for i, store_position in enumerate(indexes_of_stores):
+    #       if i == 0:
+    #         self._uops.insert(store_position, u)
+    #       elif store_position - indexes_of_stores[i-1] == 1:
+    #         # continuous store procedure from previous line, so ok to be in same if
+    #         # maybe need to add something to scope_end?
+    #         continue
+    #       else:
+    #         # uncontinuous store procedure, so need to add a new if. Need to be careful about insert position
+    #         self._uops.insert(store_position, UOp(UOps.IF, None, (u,)))
 
     # end scopes in toposort order
     for u, x in scope_end.items(): self._uops.insert(self._uops.index(x)+1, UOp(END_FOR_UOP[u.op][1], None, (u,)))
