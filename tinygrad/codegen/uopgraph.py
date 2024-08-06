@@ -581,8 +581,27 @@ class UOpGraph:
         if in_degree[u] == 0: push(u)
 
 
-    for u in self._uops:
+    items_added = 0
+    rmed_ifs = []
+    for i, u in enumerate(self._uops):
       if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.IF:
+        gate_uop = u.src[-1]
+        prev_uop = self._uops[i-1]
+        
+        if prev_uop is gate_uop or (prev_uop.op is UOps.STORE and len(u.src) == 4 and u.src[-1] is gate_uop):
+          scope_end[gate_uop] = u
+          # continue
+        else:
+          if gate_uop not in rmed_ifs:
+            self._uops.remove(gate_uop)
+            rmed_ifs.append(gate_uop)
+            scope_end.pop(gate_uop)
+
+          # zzz = UOp(UOps.IF, dtypes.bool, (gate,))
+          # new_if = UOp(UOps.IF, dtypes.bool, u.src[-1].src)
+          self._uops.insert(i-1+items_added, u.src[-1])
+          items_added += 1
+          scope_end[u.src[-1]] = u
 
 
     # for u, items in scope_children.items():

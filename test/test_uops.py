@@ -294,7 +294,7 @@ class TestGatedStoreRewrite(unittest.TestCase):
     self.assertEqual(len(gated_uops), 2)
     for x in gated_uops: self.assertIs(x.op, UOps.STORE)
 
-    assert 1 == 0
+    # assert 1 == 0
 
   def test_gate_some_stores_surrounding_no_gate(self):
     gmem0 = UOp(UOps.DEFINE_GLOBAL, PtrDType(dtypes.float), (), 0)
@@ -348,7 +348,7 @@ class TestGatedStoreRewrite(unittest.TestCase):
     gated_uops = tuple(uops.uops[uops.uops.index(ifs[0])+1:uops.uops.index(endifs[0])])
     self.assertEqual(len(gated_uops), 2)
     self.assertIs(gated_uops[-1].op, UOps.STORE)
-    assert 1 == 0
+    # assert 1 == 0
 
 class TestLocalAccess(unittest.TestCase):
   # NOTE: this is failing on METAL CI, no idea why. Works locally.
