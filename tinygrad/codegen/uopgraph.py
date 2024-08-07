@@ -586,55 +586,6 @@ class UOpGraph:
         in_degree[u] -= 1
         if in_degree[u] == 0: push(u)
 
-
-    # items_added = 0
-    # rmed_ifs = []
-    # added_ifs = []
-    # _correct_uops = []
-    # for i, u in enumerate(self._uops):
-    #   if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.IF:
-    #     gate_uop = u.src[-1]
-    #     prev_uop = self._uops[i-1]
-
-    #     if prev_uop is gate_uop:
-    #       scope_end[gate_uop] = u
-
-    #     elif prev_uop.op is UOps.STORE and len(u.src) == 4 and u.src[-1] is gate_uop:
-    #       scope_end[gate_uop] = u
-    #     else:
-    #       if gate_uop not in rmed_ifs:
-    #         self._uops.remove(gate_uop)
-    #         rmed_ifs.append(gate_uop)
-    #         scope_end.pop(gate_uop)
-
-    #       # zzz = UOp(UOps.IF, dtypes.bool, (gate,))
-    #       # new_if = UOp(UOps.IF, dtypes.bool, u.src[-1].src)
-    #       self._uops.insert(i-1+items_added, gate_uop)
-    #       items_added += 1
-    #       scope_end[gate_uop] = u
-    #   elif u.op is UOps.IF:
-    #     continue
-    #   else:
-    #     _correct_uops.append(u)
-
-
-    # for u, items in scope_children.items():
-    #   if x.op is UOps.IF:
-    #     self._uops.remove(u)
-
-    #     indexes_of_stores = [self._uops.index(x) for x in items]
-    #     indexes_of_stores.sort()
-    #     for i, store_position in enumerate(indexes_of_stores):
-    #       if i == 0:
-    #         self._uops.insert(store_position, u)
-    #       elif store_position - indexes_of_stores[i-1] == 1:
-    #         # continuous store procedure from previous line, so ok to be in same if
-    #         # maybe need to add something to scope_end?
-    #         continue
-    #       else:
-    #         # uncontinuous store procedure, so need to add a new if. Need to be careful about insert position
-    #         self._uops.insert(store_position, UOp(UOps.IF, None, (u,)))
-
     # end scopes in toposort order
     for u, x in scope_end.items():
       self._uops.insert(self._uops.index(x)+1, UOp(END_FOR_UOP[u.op][1], None, (u,)))
@@ -657,6 +608,4 @@ class UOpGraph:
 
     # strip the SINK
     self._uops = self._uops[:-1]
-    print("self._uops")
-    # print(self._uops)
     return self
