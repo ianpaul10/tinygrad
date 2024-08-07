@@ -1573,8 +1573,6 @@ class TestKernelOpts(unittest.TestCase):
       [Opt(OptOps.LOCAL, 0, 4), Opt(OptOps.LOCAL, 0, 4), Opt(OptOps.GROUPTOP, 0, 8), Opt(OptOps.UNROLL, 0, 4), Opt(OptOps.UPCAST, 0, 8)],
     ])
 
-    # assert 1 == 0
-
   @unittest.skipIf(CI and Device.DEFAULT in {"AMD"}, "AMD CI doesn't support multiple sync threads yet")
   @unittest.skipUnless(Device[Device.DEFAULT].renderer.has_local, "test requires locals")
   @unittest.skipUnless(Device[Device.DEFAULT].renderer.has_shared, "test requires shared")
@@ -1873,7 +1871,6 @@ class TestKernelOpts(unittest.TestCase):
   def test_padto_where(self):
     Tensor.manual_seed(0)
     N = 17 * 17
-    # N = 2 * 2
     a = (Tensor.randn(N, N).realize().max(axis=0, keepdim=True) > 1).where(1, 0)
     helper_linearizer_opt(a.max(0), [
       [Opt(OptOps.PADTO, 0, 32)],
