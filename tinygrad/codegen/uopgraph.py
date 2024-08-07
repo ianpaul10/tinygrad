@@ -419,12 +419,14 @@ def no_vectorized_alu(alu):
 def create_gate(root:UOp) -> Optional[UOp]:
   @functools.lru_cache(None)
   def _gate_srcs(u:UOp, gate:UOp) -> UOp:
-    if u.op is UOps.LOAD and u.src[-1].op is UOps.BARRIER: return UOp(u.op, u.dtype, u.src[:-1]+(UOp(UOps.IF, None, (gate, u.src[-1])),), u.arg)
+    if u.op is UOps.LOAD and u.src[-1].op is UOps.BARRIER:
+      src_gate = gate.src[0] if gate.op is UOps.IF else gate
+      return UOp(u.op, u.dtype, u.src[:-1]+(UOp(UOps.IF, None, (src_gate, u.src[-1])),), u.arg)
     # if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE}: # og working
     # if u.op is UOps.STORE and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE, BinaryOps.MUL}: # v3, probably not the juan
     if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.ALU and u.src[-1].dtype == dtypes.bool: # TODO: v2 maybe this is better?
     # if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is not UOps.IF: # TODO: v4 handling all gated stores?
-      return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (u.src[-1],)),), u.arg)
+      return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (gate, u.src[-1],)),), u.arg)
     return u if (replace_source:=tuple(_gate_srcs(x, gate) for x in u.src)) == u.src else UOp(u.op, u.dtype, replace_source, u.arg)
   return None if len(root.src) == 3 or (ret:=_gate_srcs(root, root.src[3])) is root else ret
 
@@ -562,13 +564,10 @@ class UOpGraph:
     self._uops = []
     while queue:
       p,x = heapq.heappop(queue)
-      # if DEBUG >= 7: print(p,x)
+      if DEBUG >= 7: print(p,x)
       if x in scope_children: scope_end[x] = x
       if x.op is UOps.DEFINE_ACC:
         idx = min([self._uops.index(l) for l in x.src if l.op is UOps.RANGE])
-        # if self._uops[idx].op is 
-        if x.op in {UOps.STORE, UOps.IF}:
-          abc = 0
         self._uops.insert(idx, x)
       elif x.op is UOps.STORE and len(x.src) == 4 and x.src[-1].op is UOps.IF:
         if self._uops[-1].op is x.src[-1].op or self._uops[-1].op is UOps.STORE and self._uops[-1].src[-1] is x.src[-1]:
@@ -577,10 +576,7 @@ class UOpGraph:
           self._uops.remove(x.src[-1])
           self._uops.append(x.src[-1])
           self._uops.append(x)
-          # added_ifs.append(x)
       else:
-        if x.op in {UOps.STORE, UOps.IF}:  
-          abc = 0
         self._uops.append(x)
       for u, ss in scope_children.items():
         if x in ss:
@@ -661,4 +657,6 @@ class UOpGraph:
 
     # strip the SINK
     self._uops = self._uops[:-1]
+    print("self._uops")
+    # print(self._uops)
     return self
