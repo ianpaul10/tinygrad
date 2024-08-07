@@ -422,9 +422,9 @@ def create_gate(root:UOp) -> Optional[UOp]:
     if u.op is UOps.LOAD and u.src[-1].op is UOps.BARRIER: return UOp(u.op, u.dtype, u.src[:-1]+(UOp(UOps.IF, None, (gate, u.src[-1])),), u.arg)
     # if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE}: # og working
     # if u.op is UOps.STORE and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE, BinaryOps.MUL}: # v3, probably not the juan
-    if u.op is UOps.STORE and u.src[-1].op is UOps.ALU and u.src[-1].dtype == dtypes.bool: # TODO: v2 maybe this is better?
+    if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.ALU and u.src[-1].dtype == dtypes.bool: # TODO: v2 maybe this is better?
     # if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is not UOps.IF: # TODO: v4 handling all gated stores?
-      return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, dtypes.bool, (gate,)),), u.arg)
+      return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (gate,)),), u.arg)
     return u if (replace_source:=tuple(_gate_srcs(x, gate) for x in u.src)) == u.src else UOp(u.op, u.dtype, replace_source, u.arg)
   return None if len(root.src) == 3 or (ret:=_gate_srcs(root, root.src[3])) is root else ret
 
@@ -562,13 +562,22 @@ class UOpGraph:
     self._uops = []
     while queue:
       p,x = heapq.heappop(queue)
-      if DEBUG >= 7: print(p,x)
+      # if DEBUG >= 7: print(p,x)
       if x in scope_children: scope_end[x] = x
       if x.op is UOps.DEFINE_ACC:
         idx = min([self._uops.index(l) for l in x.src if l.op is UOps.RANGE])
+        # if self._uops[idx].op is 
         if x.op in {UOps.STORE, UOps.IF}:
           abc = 0
         self._uops.insert(idx, x)
+      elif x.op is UOps.STORE and len(x.src) == 4 and x.src[-1].op is UOps.IF:
+        if self._uops[-1].op is x.src[-1].op or self._uops[-1].op is UOps.STORE and self._uops[-1].src[-1] is x.src[-1]:
+          self._uops.append(x)
+        else:
+          self._uops.remove(x.src[-1])
+          self._uops.append(x.src[-1])
+          self._uops.append(x)
+          # added_ifs.append(x)
       else:
         if x.op in {UOps.STORE, UOps.IF}:  
           abc = 0
@@ -582,31 +591,35 @@ class UOpGraph:
         if in_degree[u] == 0: push(u)
 
 
-    items_added = 0
-    rmed_ifs = []
-    for i, u in enumerate(self._uops):
-      if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.IF:
-        gate_uop = u.src[-1]
-        prev_uop = self._uops[i-1]
+    # items_added = 0
+    # rmed_ifs = []
+    # added_ifs = []
+    # _correct_uops = []
+    # for i, u in enumerate(self._uops):
+    #   if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.IF:
+    #     gate_uop = u.src[-1]
+    #     prev_uop = self._uops[i-1]
 
-        if prev_uop is gate_uop:
-          scope_end[gate_uop] = u
-          continue
-        
-        if prev_uop.op is UOps.STORE and len(u.src) == 4 and u.src[-1] is gate_uop:
-          scope_end[gate_uop] = u
-          continue
-        else:
-          if gate_uop not in rmed_ifs:
-            self._uops.remove(gate_uop)
-            rmed_ifs.append(gate_uop)
-            scope_end.pop(gate_uop)
+    #     if prev_uop is gate_uop:
+    #       scope_end[gate_uop] = u
 
-          # zzz = UOp(UOps.IF, dtypes.bool, (gate,))
-          # new_if = UOp(UOps.IF, dtypes.bool, u.src[-1].src)
-          self._uops.insert(i-1+items_added, u.src[-1])
-          items_added += 1
-          scope_end[u.src[-1]] = u
+    #     elif prev_uop.op is UOps.STORE and len(u.src) == 4 and u.src[-1] is gate_uop:
+    #       scope_end[gate_uop] = u
+    #     else:
+    #       if gate_uop not in rmed_ifs:
+    #         self._uops.remove(gate_uop)
+    #         rmed_ifs.append(gate_uop)
+    #         scope_end.pop(gate_uop)
+
+    #       # zzz = UOp(UOps.IF, dtypes.bool, (gate,))
+    #       # new_if = UOp(UOps.IF, dtypes.bool, u.src[-1].src)
+    #       self._uops.insert(i-1+items_added, gate_uop)
+    #       items_added += 1
+    #       scope_end[gate_uop] = u
+    #   elif u.op is UOps.IF:
+    #     continue
+    #   else:
+    #     _correct_uops.append(u)
 
 
     # for u, items in scope_children.items():
@@ -627,7 +640,8 @@ class UOpGraph:
     #         self._uops.insert(store_position, UOp(UOps.IF, None, (u,)))
 
     # end scopes in toposort order
-    for u, x in scope_end.items(): self._uops.insert(self._uops.index(x)+1, UOp(END_FOR_UOP[u.op][1], None, (u,)))
+    for u, x in scope_end.items():
+      self._uops.insert(self._uops.index(x)+1, UOp(END_FOR_UOP[u.op][1], None, (u,)))
 
     # sanity checks (NOTE: these can cause things to be skipped in BEAM)
     if not skip_check:
