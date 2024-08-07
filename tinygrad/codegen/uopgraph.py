@@ -419,16 +419,18 @@ def no_vectorized_alu(alu):
 def create_gate(root:UOp) -> Optional[UOp]:
   @functools.lru_cache(None)
   def _gate_srcs(u:UOp, gate:UOp) -> UOp:
-    if u.op is UOps.LOAD and u.src[-1].op is UOps.BARRIER:
-      src_gate = gate.src[0] if gate.op is UOps.IF else gate
-      return UOp(u.op, u.dtype, u.src[:-1]+(UOp(UOps.IF, None, (src_gate, u.src[-1])),), u.arg)
-    # if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE}: # og working
-    # if u.op is UOps.STORE and u.src[-1].op is UOps.ALU and u.src[-1].arg in {BinaryOps.CMPLT, BinaryOps.CMPNE, BinaryOps.MUL}: # v3, probably not the juan
-    if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.ALU and u.src[-1].dtype == dtypes.bool: # TODO: v2 maybe this is better?
-    # if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is not UOps.IF: # TODO: v4 handling all gated stores?
+    if u.op is UOps.LOAD and u.src[-1].op is UOps.BARRIER and gate.op is not UOps.IF:
+    # if u.op is UOps.LOAD and u.src[-1].op is UOps.BARRIER:
+      # if gate.op is UOps.IF:
+      #   return u
+      return UOp(u.op, u.dtype, u.src[:-1]+(UOp(UOps.IF, None, (gate.src[0] if gate.op is UOps.IF else gate, u.src[-1])),), u.arg)
+    if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.ALU and u.src[-1].dtype == dtypes.bool:
       return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (gate, u.src[-1],)),), u.arg)
     return u if (replace_source:=tuple(_gate_srcs(x, gate) for x in u.src)) == u.src else UOp(u.op, u.dtype, replace_source, u.arg)
-  return None if len(root.src) == 3 or (ret:=_gate_srcs(root, root.src[3])) is root else ret
+  # return None if len(root.src) == 3 or (ret:=_gate_srcs(root, root.src[3])) is root else ret
+  if len(root.src) == 3 or (ret:=_gate_srcs(root, root.src[3])) is root:
+    return None
+  return ret
 
 expander = PatternMatcher([
   # create gate MUST BE BEFORE expander
@@ -455,7 +457,11 @@ def delete_redundant_gates(root:UOp) -> Optional[UOp]:
   def find_gate(x:UOp) -> Optional[UOp]:
     if x.op is UOps.IF: return x
     return next((ret for s in x.src if (ret:=find_gate(s)) is not None), None)
-  if len(root.src) == 3 or (gate:=find_gate(root)) is None or gate.src[0] is not root.src[3]: return None
+    # this one to rm gate that was created during expand?
+  # if len(root.src) == 3 or (gate:=find_gate(root)) is None or (gate.src[0] is not root.src[3] and gate is not root.src[3]): 
+  #   return None
+  if len(root.src) == 3 or (gate:=find_gate(root)) is None or gate.src[0] is not root.src[3]:
+    return None
   return UOp(UOps.STORE, root.dtype, root.src[:3], root.arg)
 
 reducer = PatternMatcher([
@@ -576,8 +582,7 @@ class UOpGraph:
           self._uops.remove(x.src[-1])
           self._uops.append(x.src[-1])
           self._uops.append(x)
-      else:
-        self._uops.append(x)
+      else: self._uops.append(x)
       for u, ss in scope_children.items():
         if x in ss:
           ss.remove(x)
@@ -587,8 +592,7 @@ class UOpGraph:
         if in_degree[u] == 0: push(u)
 
     # end scopes in toposort order
-    for u, x in scope_end.items():
-      self._uops.insert(self._uops.index(x)+1, UOp(END_FOR_UOP[u.op][1], None, (u,)))
+    for u, x in scope_end.items():self._uops.insert(self._uops.index(x)+1, UOp(END_FOR_UOP[u.op][1], None, (u,)))
 
     # sanity checks (NOTE: these can cause things to be skipped in BEAM)
     if not skip_check:
