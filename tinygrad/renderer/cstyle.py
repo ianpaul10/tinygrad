@@ -283,11 +283,12 @@ class CUDARenderer(CStyleLanguage):
                        "i": lambda x: f"(blockIdx.{chr(120+int(x))}*blockDim.{chr(120+x)}+threadIdx.{chr(120+int(x))})"}
   code_for_op = {**CStyleLanguage().code_for_op, **code_for_op_half}
   type_map = {dtypes.bfloat16: "nv_bfloat16"}
+  type_map = {dtypes.bfloat16: "nv_bfloat16", dtypes.float8: "__nv_fp8_e4m3", dtypes.float8_e4m3: "__nv_fp8_e4m3", dtypes.float8_e5m2: "__nv_fp8_e5m2"}
 
   def render_kernel(self, function_name, kernel, bufs, uops, prefix=None):
     # TODO: why is dtypes.bfloat16.name == "__bf16"? would be easier not override dtypes.name
     # TODO: refactor to render_dtype here
-    dt_map = { dtypes.float: ("float","f32"), dtypes.half: ("half","f16"), dtypes.bfloat16: ("nv_bfloat16","bf16"), }
+    dt_map = { dtypes.float: ("float","f32"), dtypes.half: ("half","f16"), dtypes.bfloat16: ("nv_bfloat16","bf16"),  dtypes.float8: ("__nv_fp8_e4m3", "f8"), dtypes.float8_e4m3: ("__nv_fp8_e4m3", "f8"), dtypes.float8_e5m2: ("__nv_fp8_e5m2", "f8")}  # noqa: E501
 
     prefix = ["#define INFINITY (__int_as_float(0x7f800000))","#define NAN (__int_as_float(0x7fffffff))"]
     if any(uop.dtype == dtypes.half for uop in uops):
@@ -295,6 +296,11 @@ class CUDARenderer(CStyleLanguage):
 
     if any(uop.dtype == dtypes.bfloat16 for uop in uops):
       prefix += ["#include <cuda_bf16.h>"] + [_make_cuda_dtype("nv_bfloat16", x, x*2) for x in [4, 8]]
+
+    if any(uop.dtype in {dtypes.float8, dtypes.float8_e4m3, dtypes.float8_e5m2} for uop in uops):
+      prefix += ["#include <cuda_fp8.h>"]
+      if any(uop.dtype in {dtypes.float8, dtypes.float8_e4m3} for uop in uops): prefix += [_make_cuda_dtype("__nv_fp8_e4m3", x, x*2) for x in [4, 8]]
+      if any(uop.dtype == dtypes.float8_e5m2 for uop in uops): prefix += [_make_cuda_dtype("__nv_fp8_e5m2", x, x*2) for x in [4, 8]]
 
     # TODO: this has to be way better to generate for arbitrary M,N,K: use arg[1] for MNK, use arg[4] for vec sizes, encode register packing
     for arg in dedup([uop.arg for uop in uops if uop.op is UOps.WMMA]):
