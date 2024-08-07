@@ -350,6 +350,11 @@ class TestGatedStoreRewrite(unittest.TestCase):
     self.assertIs(gated_uops[-1].op, UOps.STORE)
     # assert 1 == 0
 
+  def test_gate_fail(self):
+    
+
+    assert 1 == 0
+
 class TestLocalAccess(unittest.TestCase):
   # NOTE: this is failing on METAL CI, no idea why. Works locally.
   @unittest.skipIf(Device.DEFAULT == "METAL" and CI, "failing only in CI")

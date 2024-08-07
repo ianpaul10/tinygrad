@@ -587,10 +587,14 @@ class UOpGraph:
       if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.IF:
         gate_uop = u.src[-1]
         prev_uop = self._uops[i-1]
-        
-        if prev_uop is gate_uop or (prev_uop.op is UOps.STORE and len(u.src) == 4 and u.src[-1] is gate_uop):
+
+        if prev_uop is gate_uop:
           scope_end[gate_uop] = u
-          # continue
+          continue
+        
+        if prev_uop.op is UOps.STORE and len(u.src) == 4 and u.src[-1] is gate_uop:
+          scope_end[gate_uop] = u
+          continue
         else:
           if gate_uop not in rmed_ifs:
             self._uops.remove(gate_uop)
