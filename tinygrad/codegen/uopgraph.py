@@ -420,17 +420,11 @@ def create_gate(root:UOp) -> Optional[UOp]:
   @functools.lru_cache(None)
   def _gate_srcs(u:UOp, gate:UOp) -> UOp:
     if u.op is UOps.LOAD and u.src[-1].op is UOps.BARRIER and gate.op is not UOps.IF:
-    # if u.op is UOps.LOAD and u.src[-1].op is UOps.BARRIER:
-      # if gate.op is UOps.IF:
-      #   return u
       return UOp(u.op, u.dtype, u.src[:-1]+(UOp(UOps.IF, None, (gate.src[0] if gate.op is UOps.IF else gate, u.src[-1])),), u.arg)
     if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.ALU and u.src[-1].dtype == dtypes.bool:
       return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (gate, u.src[-1],)),), u.arg)
     return u if (replace_source:=tuple(_gate_srcs(x, gate) for x in u.src)) == u.src else UOp(u.op, u.dtype, replace_source, u.arg)
-  # return None if len(root.src) == 3 or (ret:=_gate_srcs(root, root.src[3])) is root else ret
-  if len(root.src) == 3 or (ret:=_gate_srcs(root, root.src[3])) is root:
-    return None
-  return ret
+  return None if len(root.src) == 3 or (ret:=_gate_srcs(root, root.src[3])) is root else ret
 
 expander = PatternMatcher([
   # create gate MUST BE BEFORE expander
@@ -457,11 +451,7 @@ def delete_redundant_gates(root:UOp) -> Optional[UOp]:
   def find_gate(x:UOp) -> Optional[UOp]:
     if x.op is UOps.IF: return x
     return next((ret for s in x.src if (ret:=find_gate(s)) is not None), None)
-    # this one to rm gate that was created during expand?
-  # if len(root.src) == 3 or (gate:=find_gate(root)) is None or (gate.src[0] is not root.src[3] and gate is not root.src[3]): 
-  #   return None
-  if len(root.src) == 3 or (gate:=find_gate(root)) is None or gate.src[0] is not root.src[3]:
-    return None
+  if len(root.src) == 3 or (gate:=find_gate(root)) is None or gate.src[0] is not root.src[3]: return None
   return UOp(UOps.STORE, root.dtype, root.src[:3], root.arg)
 
 reducer = PatternMatcher([
