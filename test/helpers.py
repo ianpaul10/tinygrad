@@ -42,6 +42,7 @@ def is_dtype_supported(dtype: DType, device: str = Device.DEFAULT):
     if device in ["LLVM", "CUDA", "NV"]: return not CI
     if device == "PYTHON": return sys.version_info >= (3, 12)
   if dtype == dtypes.float64: return device != "METAL" and not (OSX and device == "GPU")
+  if dtype in {dtypes.float8, dtypes.float8_e4m3, dtypes.float8_e5m2}: return device == "CUDA"
   return True
 
 def rand_for_dtype(dt:DType, size:int):
