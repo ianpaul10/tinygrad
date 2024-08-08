@@ -419,7 +419,6 @@ def no_vectorized_alu(alu):
 def create_gate(root:UOp) -> Optional[UOp]:
   @functools.lru_cache(None)
   def _gate_srcs(u:UOp, gate:UOp) -> UOp:
-    # if u.op is UOps.LOAD and u.src[-1].op is UOps.BARRIER: return UOp(u.op, u.dtype, u.src[:-1]+(UOp(UOps.IF, None, (gate, u.src[-1])),), u.arg)
     if u.op is UOps.LOAD and u.src[-1].op is UOps.BARRIER and gate.op is not UOps.IF:
       return UOp(u.op, u.dtype, u.src[:-1]+(UOp(UOps.IF, None, (gate.src[0] if gate.op is UOps.IF else gate, u.src[-1])),), u.arg)
     if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op is UOps.ALU and u.src[-1].dtype == dtypes.bool:
@@ -572,12 +571,10 @@ class UOpGraph:
         else:
           self._uops.remove(x.src[-1])
           self._uops.append(x.src[-1])
-
           for child in children[x.src[-1]]:
             if child in self._uops:
               self._uops.remove(child)
               self._uops.append(child)
-
           self._uops.append(x)
       else: self._uops.append(x)
       for u, ss in scope_children.items():
@@ -589,7 +586,7 @@ class UOpGraph:
         if in_degree[u] == 0: push(u)
 
     # end scopes in toposort order
-    for u, x in scope_end.items():self._uops.insert(self._uops.index(x)+1, UOp(END_FOR_UOP[u.op][1], None, (u,)))
+    for u, x in scope_end.items(): self._uops.insert(self._uops.index(x)+1, UOp(END_FOR_UOP[u.op][1], None, (u,)))
 
     # sanity checks (NOTE: these can cause things to be skipped in BEAM)
     if not skip_check:
