@@ -111,6 +111,7 @@ class LLVMRenderer(Renderer):
         for n,phi in phis: phi.add_incoming(lvars[n], bb[-1].block)
         bb.append(ir.IRBuilder(func.append_basic_block(f"loop_exit_{len(loop_blocks)}")))
         bb[-2].cbranch(bb[-2].icmp_unsigned("<", idx_p1, lvars[src[0].src[1]]), loop_entry_bb, bb[-1].block)
+      elif uop is UOps.IF: continue
       else:
         assert dtype is not None, f"None dtype for uop {uop}"
         if uop is UOps.RANGE:
