@@ -2015,6 +2015,8 @@ class TestKernelOpts(unittest.TestCase):
       [Opt(OptOps.PADTO, 0, 32), Opt(OptOps.UPCAST, 0, 8),],
     ])
 
+    # assert 1 == 0
+
   @unittest.skipUnless(Device[Device.DEFAULT].renderer.has_local, "test requires locals")
   @unittest.skipUnless(Device[Device.DEFAULT].renderer.has_shared, "test requires shared")
   def test_padto_group(self):
