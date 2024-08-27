@@ -72,9 +72,9 @@ class TestLinearizerDumb(unittest.TestCase):
     prg = k.to_program()
     print(prg.src)
     if_uops = [u for u in k.uops if u.op is UOps.IF]
-    self.assertEqual(len(if_uops), 8)
+    self.assertEqual(len(if_uops), 2)
     conditions = if_uops[0].src[0].sparents
-    self.assertLessEqual(len(conditions), 8)
+    self.assertLessEqual(len(conditions), 3)
 
   # this was a bug in embedding, someday we should fold this anyway
   def test_llama_embedding(self):
