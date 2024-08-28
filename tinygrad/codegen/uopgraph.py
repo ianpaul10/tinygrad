@@ -451,6 +451,9 @@ def create_gate(root:UOp) -> Optional[UOp]:
       # OLD WAY PASSING amd test
       return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (u.src[-1],)),), u.arg)
       # NEW WAY failing amd test
+      # print("adding gate to store with barrier of u.src[2]")
+      # print(u.src[2])
+      # return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (gate, u.src[2])),), u.arg)
       # return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (u.src[-1], u.src[2])),), u.arg)
     return u if (replace_source:=tuple(_gate_srcs(x, gate) for x in u.src)) == u.src else UOp(u.op, u.dtype, replace_source, u.arg)
   return None if len(root.src) == 3 or (ret:=_gate_srcs(root, root.src[3])) is root else ret
@@ -480,6 +483,8 @@ def delete_redundant_gates(root:UOp) -> Optional[UOp]:
   def find_gate(x:UOp) -> Optional[UOp]:
     if x.op is UOps.IF: return x
     return next((ret for s in x.src if (ret:=find_gate(s)) is not None), None)
+  # if len(root.src) == 3 or (gate:=find_gate(root)) is None or gate.src[0] is not root.src[3]: return None
+  # return UOp(UOps.STORE, root.dtype, root.src[:3], root.arg)
   if len(root.src) == 4 and (sub_gate:=find_gate(root.src[2])) and sub_gate.src[0] is root.src[-1].src[0]:
     return UOp(UOps.STORE, root.dtype, root.src[:3], root.arg)
   return None
