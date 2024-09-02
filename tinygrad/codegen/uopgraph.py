@@ -449,11 +449,11 @@ def create_gate(root:UOp) -> Optional[UOp]:
       return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (gate if gate.op is not UOps.IF else gate.src[0], u.src[-1])),), u.arg)
     if u.op is UOps.STORE and len(u.src) == 4 and u.src[-1].op in { UOps.ALU, UOps.CAST }:
       # OLD WAY PASSING amd test
-      # return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (u.src[-1],)),), u.arg)
+      return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (u.src[-1],)),), u.arg)
       # NEW WAY failing amd test
       # print("adding gate to store with barrier of u.src[2]")
       # print(u.src[2])
-      return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (gate, u.src[2] if u.src[2].op is not UOps.EXPAND else u.src[2].src[0])),), u.arg)
+      # return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (gate, u.src[2] if u.src[2].op is not UOps.EXPAND else u.src[2].src[0])),), u.arg)
       # return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (gate, u.src[2])),), u.arg)
       # return UOp(u.op, u.dtype, u.src[:-1] + (UOp(UOps.IF, None, (u.src[-1], u.src[2])),), u.arg)
     return u if (replace_source:=tuple(_gate_srcs(x, gate) for x in u.src)) == u.src else UOp(u.op, u.dtype, replace_source, u.arg)
