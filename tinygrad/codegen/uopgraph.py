@@ -450,8 +450,27 @@ def delete_redundant_gates(root:UOp) -> Optional[UOp]:
   def find_gate(x:UOp) -> Optional[UOp]:
     if x.op is UOps.IF: return x
     return next((ret for s in x.src if (ret:=find_gate(s)) is not None), None)
-  if len(root.src) == 3 or (gate:=find_gate(root)) is None or gate.src[0] is not root.src[3]: return None
-  return UOp(UOps.STORE, root.dtype, root.src[:3], root.arg)
+  if len(root.src) == 4 and (sub_gate:=find_gate(root.src[2])) and sub_gate.src[0] is root.src[-1].src[0]:
+    return UOp(UOps.STORE, root.dtype, root.src[:3], root.arg)
+  return None
+
+def update_gates(root:UOp) -> Optional[UOp]:
+  if len(root.src) < 4 or root.src[3].op is UOps.IF: return None
+  return UOp(UOps.STORE, root.dtype, root.src[:3] + (UOp(UOps.IF, None, (root.src[3], root.src[2])),), root.arg)
+
+def merge_gates(sink:UOp) -> Optional[UOp]:
+  gated_stores = [x for x in sink.src if x.op is UOps.STORE and len(x.src) == 4]
+  if len(gated_stores) <= 1 or len(gated_stores) == len({x.src[3].src[0] for x in gated_stores}): return None
+  ifs_to_bars: Dict[UOp, list[UOp]] = {}
+  for x in gated_stores: ifs_to_bars.update({x.src[3].src[0]: ifs_to_bars.get(x.src[3].src[0], []) + [x.src[2]]})
+  if all(len(x.src[3].src) - 1 == len(ifs_to_bars[x.src[3].src[0]]) for x in gated_stores): return None
+  new_sink_srcs = []
+  for x in sink.src:
+    if x.op is UOps.STORE and len(x.src) == 4:
+      new_if = UOp(UOps.IF, None, (x.src[3].src[0],) + tuple(ifs_to_bars[x.src[3].src[0]]), None)
+      new_sink_srcs.append(UOp(UOps.STORE, x.dtype, x.src[:-1] + (new_if,), x.arg))
+    else: new_sink_srcs.append(x)
+  return UOp(UOps.SINK, sink.dtype, tuple(new_sink_srcs), sink.arg)
 
 reducer = PatternMatcher([
   (NOp(UOps.REDUCE, name="root"), do_reduce),
@@ -461,6 +480,8 @@ reducer = PatternMatcher([
   (NOp(UOps.STORE, name="root"), delete_redundant_gates),
   # late fixup of unfoldable image loads
   (UPat(UOps.LOAD, src=(UPat(name="buf"), UPat()), allow_any_len=True, name="load"), fix_unfoldable_image_load),
+  (NOp(UOps.STORE, name="root"), update_gates),
+  (NOp(UOps.SINK, name="sink"), merge_gates),
 ])
 
 no_pyint = PatternMatcher([(UPat({UOps.CONST, UOps.ALU, UOps.SPECIAL, UOps.RANGE, UOps.EXPAND}, dtype=dtypes.pyint, name="x"),

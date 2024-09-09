@@ -289,9 +289,9 @@ class UOps(Enum):
 
   - **`dtype`**: `None`
   - **`src`**:
-    `Tuple[UOp, UOp]`
+    `Tuple[UOp, ...]`
       - Gate UOp, can only return `dtypes.bool`
-      - The second UOp starts the gate block; All of its children are gated until the final STORE.
+      - The second UOp and onwards starts the gate block; All of their children are gated until the final STORE.
   - **`arg`**: `None`
 
   For example, a local reduce must only run on one thread.
@@ -505,7 +505,7 @@ def type_verify(uops):
       assert all(dtype == x.dtype.vec(len(src)) for x in src), f"{dtype=} must be {src[0].dtype.vec(len(src))}"
     if uop is UOps.LOAD and len(src) > 3 and src[3].op is UOps.ALU: assert src[3].dtype == dtypes.bool and src[2].dtype == dtype
     if uop is UOps.GEP: assert dtype == src[0].dtype.scalar(), f"GEP of {src[0].dtype=} should be {src[0].dtype.scalar()} != {dtype}"
-    if uop is UOps.IF: assert dtype is None and len(src) == 2 and src[0].dtype == dtypes.bool
+    if uop is UOps.IF: assert dtype is None and len(src) >= 2 and src[0].dtype == dtypes.bool
     if uop is UOps.STORE:
       assert dtype is None, f"{uop} dtype must be None, got {dtype}"
       if len(src) == 4: assert src[3].dtype == dtypes.bool or src[3].op is UOps.IF, f"bad gate {src[3]}"
