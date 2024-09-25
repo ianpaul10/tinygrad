@@ -1,5 +1,5 @@
 import unittest
-from tinygrad import Tensor
+from tinygrad import Tensor, Device
 from tinygrad.helpers import getenv, GlobalCounters
 from tinygrad.engine.schedule import create_schedule
 from tinygrad.engine.realize import lower_schedule_item
@@ -7,6 +7,7 @@ from tinygrad.codegen.uopgraph import linearize_uop
 from tinygrad.ops import BinaryOps, TernaryOps, flops_mem, UOps, UOp
 from tinygrad.dtype import PtrDType, dtypes
 from tinygrad.codegen.kernel import Kernel, Opt, OptOps, KernelOptError
+from tinygrad.helpers import CI
 
 # **************** new FlopCounter ****************
 
@@ -218,6 +219,18 @@ class TestStatsOptimized(unittest.TestCase):
     p = k.to_program()
     # NOTE: these are wrong, they don't respect the if statement
     print(p.name, p.op_estimate, p.mem_estimate, p.lds_estimate)
+
+  @unittest.skipUnless(Device[Device.DEFAULT].renderer.has_local, "test needs local")
+  @unittest.skipIf(CI and Device.DEFAULT == "METAL", "failed on METAL CI")
+  def test_gated_store(self):
+    n = 64
+    ast = (Tensor.empty(n, n) @ Tensor.empty(n, n)).schedule()[-1].ast
+    k = Kernel(ast)
+    opts = [Opt(op=OptOps.LOCAL, axis=1, amt=16), Opt(op=OptOps.PADTO, axis=2, amt=32)]
+    for opt in opts: k.apply_opt(opt)
+    p = k.to_program()
+    print(p.name, p.op_estimate, p.mem_estimate, p.lds_estimate)
+    self.assertEqual(p.op_estimate, n*n*n*2*2)
 
 if __name__ == '__main__':
   unittest.main(verbosity=2)

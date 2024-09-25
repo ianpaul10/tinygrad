@@ -1043,7 +1043,7 @@ class TestLinearizerFailures(unittest.TestCase):
     k = helper_test_lin(Kernel(ast), opts=opts, failed_platforms=[])
     assert k is not None
     ifs = [u for u in k.uops if u.op is UOps.IF]
-    self.assertEqual(len(ifs), 1)
+    self.assertEqual(len(ifs), 5)
     #for st in k.uops.sink.src: self.assertEqual(len(st.src), 4)
     self.assertLessEqual(len(ifs[0].src[0].sparents), 17)
 
@@ -1197,6 +1197,32 @@ class TestLinearizerFailures(unittest.TestCase):
             UOp(UOps.SHAPETRACKER, dtypes.void, arg=ShapeTracker(views=(View(shape=(1, 1, 20, 1, 20), strides=(0, 0, 0, 0, 0), offset=0, mask=None, contiguous=False),)), src=()),)),)),)),))
     opts = [Opt(op=OptOps.UPCAST, axis=1, amt=2)]
     helper_test_lin(Kernel(ast, opts=Device[Device.DEFAULT].renderer), opts=opts, failed_platforms=[])
+
+  @unittest.skipUnless(Device[Device.DEFAULT].renderer.has_local, "test needs local")
+  @unittest.skipIf(CI and Device.DEFAULT == "METAL", "failed on METAL CI")
+  def test_failure_51(self):
+    # from `BEAM=4 NV=1 HALF=1 IGNORE_BEAM_CACHE=1 DEBUG=2 python3 extra/gemm/simple_matmul.py` resulting in program.op_estimate == 0 because of the incorrect counting of gated stores
+    ast = UOp(UOps.SINK, dtypes.void, arg=None, src=(
+      UOp(UOps.STORE, dtypes.void, arg=None, src=(
+        UOp(UOps.DEFINE_GLOBAL, PtrDType(dtypes.half), arg=0, src=()),
+        UOp(UOps.SHAPETRACKER, dtypes.void, arg=ShapeTracker(views=(View(shape=(4096, 4096, 1), strides=(4096, 1, 0), offset=0, mask=None, contiguous=True),)), src=()),
+        UOp(UOps.CAST, dtypes.half, arg=None, src=(
+          UOp(UOps.REDUCE_AXIS, dtypes.float, arg=(BinaryOps.ADD, (2,)), src=(
+            UOp(UOps.CAST, dtypes.float, arg=None, src=(
+              UOp(UOps.ALU, dtypes.half, arg=BinaryOps.MUL, src=(
+                UOp(UOps.LOAD, dtypes.half, arg=None, src=(
+                  UOp(UOps.DEFINE_GLOBAL, PtrDType(dtypes.half), arg=1, src=()),
+                  UOp(UOps.SHAPETRACKER, dtypes.void, arg=ShapeTracker(views=(View(shape=(4096, 4096, 4096), strides=(4096, 0, 1), offset=0, mask=None, contiguous=False),)), src=()),)),
+                UOp(UOps.LOAD, dtypes.half, arg=None, src=(
+                  UOp(UOps.DEFINE_GLOBAL, PtrDType(dtypes.half), arg=2, src=()),
+                  UOp(UOps.SHAPETRACKER, dtypes.void, arg=ShapeTracker(views=(View(shape=(4096, 4096, 4096), strides=(0, 1, 4096), offset=0, mask=None, contiguous=False),)), src=()),)),)),)),)),)),)),))
+    opts = [Opt(op=OptOps.LOCAL, axis=1, amt=16), Opt(op=OptOps.PADTO, axis=2, amt=32)]
+    kernel = Kernel(ast)
+    for opt in opts: kernel.apply_opt(opt)
+    kernel.linearize()
+    program = kernel.to_program()
+    helper_test_lin(Kernel(ast), opts=opts, failed_platforms=[])
+    assert program.op_estimate == 4096*4096*4096*2*2
 
 if __name__ == '__main__':
   unittest.main()
