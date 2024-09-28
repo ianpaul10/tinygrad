@@ -1,9 +1,9 @@
 import unittest
-from tinygrad import Tensor
+from tinygrad import Tensor, Device
 from tinygrad.helpers import getenv, GlobalCounters
 from tinygrad.engine.schedule import create_schedule
 from tinygrad.engine.realize import lower_schedule_item
-from tinygrad.codegen.uopgraph import linearize_uop
+from tinygrad.codegen.uopgraph import linearize_uop, full_graph_rewrite
 from tinygrad.ops import BinaryOps, TernaryOps, flops_mem, UOps, UOp
 from tinygrad.dtype import PtrDType, dtypes
 from tinygrad.codegen.kernel import Kernel, Opt, OptOps, KernelOptError
@@ -219,6 +219,65 @@ class TestStatsOptimized(unittest.TestCase):
     p = k.to_program()
     # NOTE: these are wrong, they don't respect the if statement
     print(p.name, p.op_estimate, p.mem_estimate, p.lds_estimate)
+
+  @unittest.skipUnless(Device[Device.DEFAULT].renderer.has_local, "test needs local")
+  def test_gated_store_with_alu_gate(self):
+    n = 4
+
+    a = UOp(UOps.DEFINE_GLOBAL, PtrDType(dtypes.float), (), 0)
+    b = UOp(UOps.DEFINE_GLOBAL, PtrDType(dtypes.float), (), 1)
+    con0 = UOp.const(dtypes.float, 0.0)
+    con1 = UOp.const(dtypes.int, n)
+
+    lidx0 = UOp(UOps.SPECIAL, dtypes.int, (), ('lidx0', 8))
+    alu0 = UOp(UOps.ALU, dtypes.bool, (lidx0, con1), BinaryOps.CMPLT)
+
+    ran0 = UOp(UOps.RANGE, dtypes.int, (UOp.const(dtypes.int, (0,)), con1), (3, True))
+    acc0 = UOp(UOps.DEFINE_ACC, dtypes.float, (con0, ran0), (0,))
+
+    alu1 = UOp(UOps.ALU, dtypes.int, (lidx0, ran0), BinaryOps.ADD)
+    load0 = UOp(UOps.LOAD, dtypes.float, (b, alu1, con0, alu0))
+    alu2 = UOp(UOps.ALU, dtypes.float, (acc0, load0), BinaryOps.ADD)
+    assign0 = UOp(UOps.ASSIGN, dtypes.float, (acc0, alu2))
+
+    store0 = UOp(UOps.STORE, dtypes.void, (a, con1, assign0, alu0))
+    sink = UOp(UOps.SINK, dtypes.void, (store0,))
+
+    uops = linearize_uop(full_graph_rewrite(sink, Device[Device.DEFAULT].renderer))
+    expected_res = flops_mem(uops, ignore_indexing=True)
+    self.assertEqual(expected_res[0], n*n*2)
+
+  @unittest.skipUnless(Device[Device.DEFAULT].renderer.has_local, "test needs local")
+  def test_gated_store_with_if_gate(self):
+    n = 4
+
+    a = UOp(UOps.DEFINE_GLOBAL, PtrDType(dtypes.float), (), 0)
+    b = UOp(UOps.DEFINE_GLOBAL, PtrDType(dtypes.float), (), 1)
+    con0 = UOp.const(dtypes.float, 0.0)
+    con1 = UOp.const(dtypes.int, n)
+
+    lidx0 = UOp(UOps.SPECIAL, dtypes.int, (), ('lidx0', 8))
+    alu0 = UOp(UOps.ALU, dtypes.bool, (lidx0, con1), BinaryOps.CMPLT)
+
+    ran0 = UOp(UOps.RANGE, dtypes.int, (UOp.const(dtypes.int, (0,)), con1), (3, True))
+    acc0 = UOp(UOps.DEFINE_ACC, dtypes.float, (con0, ran0), (0,))
+
+    alu1 = UOp(UOps.ALU, dtypes.int, (lidx0, ran0), BinaryOps.ADD)
+    load0 = UOp(UOps.LOAD, dtypes.float, (b, alu1, con0, alu0))
+    alu2 = UOp(UOps.ALU, dtypes.float, (acc0, load0), BinaryOps.ADD)
+    assign0 = UOp(UOps.ASSIGN, dtypes.float, (acc0, alu2))
+
+    if0 = UOp(UOps.IF, dtypes.void, (alu0, assign0))
+    store_with_if = UOp(UOps.STORE, dtypes.void, (a, con1, assign0, if0))
+    sink_w_if = UOp(UOps.SINK, dtypes.void, (store_with_if,))
+
+    uops_w_if = linearize_uop(full_graph_rewrite(sink_w_if, Device[Device.DEFAULT].renderer))
+
+    expected_res = flops_mem(uops_w_if, ignore_indexing=True)
+
+    with self.assertRaises(AssertionError):
+      self.assertEqual(expected_res[0], n*n*2)
+    self.assertEqual(expected_res[0], 0)
 
 if __name__ == '__main__':
   unittest.main(verbosity=2)
