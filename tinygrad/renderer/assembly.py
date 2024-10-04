@@ -55,6 +55,9 @@ ptx_matcher = sym+PatternMatcher([
   # load/store use pointer arithmetic
   (UPat((UOps.LOAD, UOps.STORE), name="x", allow_any_len=True, src=(UPat((UOps.DEFINE_LOCAL,UOps.DEFINE_GLOBAL), name="buf"),
     UPat.any(UPat.var("alu")+UPat.cvar("const"), UPat.cvar("const"), UPat.var("alu")))), load_store_ptr_arithmetic),
+    # gate any stores that aren't gated with ifs
+  (UPat(UOps.STORE, dtype=dtypes.void, src=(UPat(), UPat(), UPat(), UPat(dtype=dtypes.bool)), name="store"),
+    lambda store: UOp(UOps.STORE, src=store.src[:3]+(UOp(UOps.IF, src=(store.src[3].ne(UOp.const(dtypes.bool, True)),)),))),
 ])
 
 class PTXRenderer(Renderer):
