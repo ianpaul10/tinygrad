@@ -545,6 +545,11 @@ reducer = PatternMatcher([
   (UPat(UOps.LOAD, name="load"), simplify_buffer_load),
 ])
 
+add_if_gates =  PatternMatcher([
+  (UPat(UOps.STORE, dtype=dtypes.void, src=(UPat(), UPat(), UPat(), UPat(dtype=dtypes.bool)), name="store"),
+    lambda store: UOp(UOps.STORE, src=store.src[:3]+(UOp(UOps.IF, src=(store.src[3],)),), arg=store.arg)),
+])
+
 # *** uop graph ***
 
 linearize_cnt = 0
@@ -567,4 +572,5 @@ def full_graph_rewrite(sink:UOp, opts:Optional[Renderer]=None) -> UOp:
       sink = graph_rewrite(sink, sym+get_extra_patterns(tuple(opts.code_for_op.keys()) if opts is not None else (), TRANSCENDENTAL>=2))
 
   if opts is not None and opts.extra_matcher is not None: sink = graph_rewrite(sink, opts.extra_matcher)
+  sink = graph_rewrite(sink, add_if_gates)
   return sink
