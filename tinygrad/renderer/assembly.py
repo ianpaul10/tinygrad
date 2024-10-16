@@ -53,6 +53,10 @@ ptx_matcher = sym+PatternMatcher([
    lambda x: UOp(x.op, dtypes.uint8, x.src[0:2] + ((x.src[2].cast(dtypes.uint8),) if len(x.src) >= 3 else ()) + x.src[3:]).cast(dtypes.bool)),
   (UPat(UOps.STORE, src=(UPat(), UPat(), UPat(dtype=dtypes.bool)), name="x", allow_any_len=True),
    lambda x: UOp(x.op, dtypes.void, x.src[0:2] + (x.src[2].cast(dtypes.uint8),) + x.src[3:])),
+  # gate stores and invert their if conditions
+  (UPat(UOps.STORE, dtype=dtypes.void, src=(UPat(), UPat(), UPat(), UPat(dtype=dtypes.bool)), name="store"),
+    lambda store: UOp(UOps.STORE, src=store.src[:3]+(
+        UOp(UOps.IF, src=(UOp(UOps.ALU, dtypes.bool, (store.src[3], UOp.const(dtypes.bool, True)), BinaryOps.CMPNE),)),), arg=store.arg)),
   # load/store use pointer arithmetic
   (UPat((UOps.LOAD, UOps.STORE), name="x", allow_any_len=True, src=(UPat((UOps.DEFINE_LOCAL,UOps.DEFINE_GLOBAL), name="buf"),
     UPat.any(UPat.var("alu")+UPat.cvar("const"), UPat.cvar("const"), UPat.var("alu")))), load_store_ptr_arithmetic),
@@ -103,8 +107,8 @@ class PTXRenderer(Renderer):
     if gate: return [f"@{gate} ld{ss}.{self.mem_types[dtype]} {dest}, [{loc}+{offset}];", f"@!{gate} mov.b{self.types[dtype][1:]} {dest}, {alt};"]
     return [f"ld{ss}.{self.mem_types[dtype]} {dest}, [{loc}+{offset}];"]
 
-  def render_store(self, loc, val, dtype, gate=None, ss="", offset=0) -> List[str]:
-    return [(f"@{gate} " if gate else "") + f"st{ss}.{self.mem_types[dtype]} [{loc}+{offset}], {val};"]
+  def render_store(self, loc, val, dtype, ss="", offset=0) -> List[str]:
+    return [f"st{ss}.{self.mem_types[dtype]} [{loc}+{offset}], {val};"]
 
   def render_cast(self, d:str, a:str, dtype:DType, atype:DType, bitcast=False, pred=False) -> List[str]:
     if bitcast: return [f"mov.b{self.types[dtype][1:]} {d}, {a};"]
@@ -169,8 +173,7 @@ class PTXRenderer(Renderer):
           kk((f"@{r[src[3]]} " if len(src)>3 else "") + \
               f"st{mem_type}.v{src[2].dtype.count}.{self.mem_types[src[2].dtype.scalar()]} [{r[src[0]]}+{src[1].arg}], {{{', '.join(r[src[2]])}}};")
         else:
-          kk(*self.render_store(r[src[0]], r[src[2]], src[2].dtype,
-                                gate=r[src[3]] if len(src)>3 and src[3].op is not UOps.IF else None, ss=mem_type, offset=src[1].arg))
+          kk(*self.render_store(r[src[0]], r[src[2]], src[2].dtype, ss=mem_type, offset=src[1].arg))
       else:
         if uop is UOps.RANGE: kk(*self.render_loop(loop:=ssa('ridx', u), r[src[0]], "LOOP_"+loop[1:]))
         elif uop is UOps.ALU:
