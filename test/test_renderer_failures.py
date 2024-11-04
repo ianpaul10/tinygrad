@@ -53,7 +53,6 @@ class TestPTXFailures(unittest.TestCase):
     ret = _test_uop_result([], uops, local_size=[4, 1, 1])[0]
     np.testing.assert_equal(ret, [0, 1, 1, 1])
 
-  @unittest.skip("not still valid?")
   def test_gated_store_with_if(self):
     a = UOp(UOps.DEFINE_GLOBAL, dtypes.int.ptr(), (), 0)
     gate_alu = (lidx0:=UOp(UOps.SPECIAL, dtypes.int, (), ('lidx0', 4))).ne(0)
